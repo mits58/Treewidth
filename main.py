@@ -30,50 +30,7 @@ def set_str(subset, v):
     return str(int_set(subset)) + " " + str(v)
 
 
-def Q(G, S, v):
-    """
-    This function calculates Q(S, v) = {w ∈ V − S − {v} | there is a path from v to w in G[S ∪ {v, w}]}.
-    The time complexity of this function is O(n + m) time.
-
-    Parameters
-    ----------
-    G : Graph object
-        entire graph
-    S : set
-        a subset of vertices
-    v : int
-        vertex
-
-    Returns
-    -------
-    {w ∈ V − S − {v} | there is a path from v to w in G[S ∪ {v, w}]} : int
-        The string representation of a given subset and a given vertex.
-    """
-    cnt = 0
-    induce_V = S
-    induce_V.add(v)
-
-    # initialize union find tree
-    uf = UnionFind(len(G.nodes))
-
-    # calc connected component
-    for edge in G.edges:
-        (source, sink) = edge
-        if source in induce_V and sink in induce_V:
-            uf.Unite(source, sink)
-
-    # enum paths
-    for vertex in (set(G.nodes) - S - set([v])):
-        # v and w is same connected component?
-        for neighbor in G[vertex]:
-            if uf.isSameGroup(v, neighbor):
-                cnt += 1
-                break
-
-    return cnt
-
-
-class TreewidthAlgorithm():
+class TreewidthAlgorithm:
     """
     A class for algorithms calculates treewidth.
     The attributes in this class have some
@@ -86,12 +43,8 @@ class TreewidthAlgorithm():
         memorize the result of Q(G, S, v)
     bound : string
         use upper-prune or lower-prune or both
-    prune_num : int
-        memorize the number of pruned search state
     func_call_num : int
         memorize the number of function calls
-    eval_GNN_time : float
-        memorize the time of evaluation GNN
     """
     def __init__(self, prune):
         self.dp_S = {}
@@ -214,7 +167,7 @@ class TreewidthAlgorithm():
         res = False
 
         for sub_S in itertools.combinations(S, len(S) // 2):
-            check1 = self.calc_treewidth_poly_space(G,copy.deepcopy(L), copy.deepcopy(set(sub_S)), opt)
+            check1 = self.calc_treewidth_poly_space(G, copy.deepcopy(L), copy.deepcopy(set(sub_S)), opt)
             check2 = self.calc_treewidth_poly_space(G, copy.deepcopy(L | set(sub_S)), copy.deepcopy(S - set(sub_S)), opt)
             res = (res or (check1 and check2))
         return res
@@ -241,7 +194,7 @@ class TreewidthAlgorithm():
         self.func_call_num += 1
 
         if len(S) == 1:
-            return Q(G, L, list(S)[0])
+            return self.Q(G, L, list(S)[0])
 
         res = float('inf')
 
@@ -251,7 +204,8 @@ class TreewidthAlgorithm():
             res = min(res, max(val1, val2))
         return res
 
-def ordinaryDP(eval_graph, calc_type):
+
+def linear_search(eval_graph, calc_type):
     calc_DP_tw = TreewidthAlgorithm(calc_type)
 
     check_range = range(1, eval_graph.number_of_nodes()) if calc_type == "lower" else range(eval_graph.number_of_nodes() - 1, -1, -1)
@@ -259,16 +213,28 @@ def ordinaryDP(eval_graph, calc_type):
     start = time.time()
 
     for opt in check_range:
-        #DP_tw = calc_DP_tw.calc_treewidth_recursive(eval_graph, eval_graph.nodes, opt)
-        DP_tw = calc_DP_tw.calc_treewidth_poly_space(eval_graph, set(), eval_graph.nodes, opt)
+        DP_tw = calc_DP_tw.calc_treewidth_recursive(eval_graph, eval_graph.nodes, opt)
+        # DP_tw = calc_DP_tw.calc_treewidth_poly_space(eval_graph, set(), eval_graph.nodes, opt)
         if (DP_tw and (calc_type == "lower")) or ((not DP_tw) and (calc_type == "upper")):
             break
         calc_DP_tw.initialize()
 
-    # opt = calc_DP_tw.exact_4_n(eval_graph, set(), set(eval_graph.nodes))
     end = time.time()
 
     return end - start, opt + (0 if calc_type == "lower" else 1), calc_DP_tw.func_call_num
+
+
+def exact_calc(eval_graph, calc_type):
+    calc_DP_tw = TreewidthAlgorithm("exact")
+
+    start = time.time()
+    if calc_type == "2_n":
+        tw = calc_DP_tw.exact_2_n(eval_graph, set(eval_graph.nodes))
+    else:
+        tw = calc_DP_tw.exact_4_n(eval_graph, set(), set(eval_graph.nodes))
+    end = time.time()
+
+    return end - start, tw, calc_DP_tw.func_call_num
 
 
 def main(args):
@@ -296,7 +262,7 @@ def main(args):
             graphstat = "{3}\t{0}\t{1}\t{2}".format(eval_graph.number_of_nodes(), eval_graph.number_of_edges(), tw, str(idx).rjust(5))
             print('{0}\t{1}\t{2}\t{3}'.format(str(idx).rjust(5), eval_graph.number_of_nodes(), eval_graph.number_of_edges(), tw), end='\t')
             try:
-                tm, evtw, fcn = ordinaryDP(eval_graph, calc_type)
+                tm, evtw, fcn = linear_search(eval_graph, calc_type)
                 res = "{0}\t{1}\t{2}".format(tm, evtw, fcn)
             except TimeoutError:
                 res = "TimeOut"
@@ -306,7 +272,7 @@ def main(args):
 
     # write results to a file
     if args.out_to_file:
-        with open("./{}/Approach1/".format(args.out) + output_file, "w") as f:
+        with open("./{}/".format(args.out) + output_file, "w") as f:
             f.write('\n'.join(result))
 
 
