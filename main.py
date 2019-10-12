@@ -1,6 +1,7 @@
 import argparse
 import time
 import itertools
+import copy
 
 import networkx as nx
 import dwave_networkx as dnx
@@ -213,12 +214,42 @@ class TreewidthAlgorithm():
         res = False
 
         for sub_S in itertools.combinations(S, len(S) // 2):
-            check1 = self.calc_treewidth_poly_space(G, L, set(sub_S), opt)
-            check2 = self.calc_treewidth_poly_space(G, (L | set(sub_S)), (S - set(sub_S)), opt)
+            check1 = self.calc_treewidth_poly_space(G,copy.deepcopy(L), copy.deepcopy(set(sub_S)), opt)
+            check2 = self.calc_treewidth_poly_space(G, copy.deepcopy(L | set(sub_S)), copy.deepcopy(S - set(sub_S)), opt)
             res = (res or (check1 and check2))
         return res
 
+    def exact_2_n(self, G, S):
+        self.func_call_num += 1
 
+        if len(S) == 1:
+            return self.Q(G, set(), S.pop())
+
+        if int_set(S) in self.dp_S:
+            return self.dp_S[int_set(S)]
+
+        res = float('inf')
+
+        for vertex in S:
+            Qval = self.Q(G, S - set([vertex]), vertex)
+            res = min(res, max(Qval, self.exact_2_n(G, S - set([vertex]))))
+
+        self.dp_S[int_set(S)] = res
+        return res
+
+    def exact_4_n(self, G, L, S):
+        self.func_call_num += 1
+
+        if len(S) == 1:
+            return Q(G, L, list(S)[0])
+
+        res = float('inf')
+
+        for sub_S in itertools.combinations(S, int(len(S) / 2)):
+            val1 = self.exact_4_n(G, copy.deepcopy(L), copy.deepcopy(set(sub_S)))
+            val2 = self.exact_4_n(G, copy.deepcopy(L | set(sub_S)), copy.deepcopy(S - set(sub_S)))
+            res = min(res, max(val1, val2))
+        return res
 
 def ordinaryDP(eval_graph, calc_type):
     calc_DP_tw = TreewidthAlgorithm(calc_type)
@@ -226,12 +257,15 @@ def ordinaryDP(eval_graph, calc_type):
     check_range = range(1, eval_graph.number_of_nodes()) if calc_type == "lower" else range(eval_graph.number_of_nodes() - 1, -1, -1)
 
     start = time.time()
+
     for opt in check_range:
         #DP_tw = calc_DP_tw.calc_treewidth_recursive(eval_graph, eval_graph.nodes, opt)
         DP_tw = calc_DP_tw.calc_treewidth_poly_space(eval_graph, set(), eval_graph.nodes, opt)
         if (DP_tw and (calc_type == "lower")) or ((not DP_tw) and (calc_type == "upper")):
             break
         calc_DP_tw.initialize()
+
+    # opt = calc_DP_tw.exact_4_n(eval_graph, set(), set(eval_graph.nodes))
     end = time.time()
 
     return end - start, opt + (0 if calc_type == "lower" else 1), calc_DP_tw.func_call_num
@@ -252,8 +286,6 @@ def main(args):
         while not nx.is_connected(g):
             g = nx.dense_gnm_random_graph(n, m)
 
-        if idx == 0:
-            continue
         graphs.append(g)
 
     for idx, eval_graph in enumerate(graphs):
