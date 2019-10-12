@@ -1,17 +1,10 @@
 import argparse
 import time
-import timeout_decorator
-import pickle
+import itertools
 
-import chainer
-import chainer.functions as F
 import networkx as nx
 import dwave_networkx as dnx
 import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import sklearn.metrics
-import seaborn as sns
 
 from uf import UnionFind
 
@@ -122,6 +115,8 @@ class TreewidthAlgorithm():
                 if v:
                     new_S[k] = v
             self.dp_S = new_S
+        else:
+            pass
 
     def Q(self, G, S, v):
         '''
@@ -208,6 +203,23 @@ class TreewidthAlgorithm():
         self.dp_S[int_set(S)] = res
         return res
 
+    def calc_treewidth_poly_space(self, G, L, S, opt):
+        self.func_call_num += 1
+
+        if len(S) == 1:
+            qval = self.Q(G, L, S.pop())
+            return qval <= opt
+
+        res = False
+
+        for sub_S in itertools.combinations(S, len(S) // 2):
+            check1 = self.calc_treewidth_poly_space(G, L, set(sub_S), opt)
+            check2 = self.calc_treewidth_poly_space(G, (L | set(sub_S)), (S - set(sub_S)), opt)
+            res = (res or (check1 and check2))
+        return res
+
+
+
 def ordinaryDP(eval_graph, calc_type):
     calc_DP_tw = TreewidthAlgorithm(calc_type)
 
@@ -215,7 +227,8 @@ def ordinaryDP(eval_graph, calc_type):
 
     start = time.time()
     for opt in check_range:
-        DP_tw = calc_DP_tw.calc_treewidth_recursive(eval_graph, eval_graph.nodes, opt)
+        #DP_tw = calc_DP_tw.calc_treewidth_recursive(eval_graph, eval_graph.nodes, opt)
+        DP_tw = calc_DP_tw.calc_treewidth_poly_space(eval_graph, set(), eval_graph.nodes, opt)
         if (DP_tw and (calc_type == "lower")) or ((not DP_tw) and (calc_type == "upper")):
             break
         calc_DP_tw.initialize()
@@ -233,14 +246,15 @@ def main(args):
     # make some graphs
     graphs = []
     for idx in range(0, args.data_num):
-        n = np.random.randint(5, 15) # [5, 10] |V|
-        m = np.random.randint(n - 1, (n * (n - 1)) // 2) # |E|
+        n = np.random.randint(5, 10)  # [5, 10] |V|
+        m = np.random.randint(n - 1, (n * (n - 1)) // 2)  # |E|
         g = nx.dense_gnm_random_graph(n, m)
         while not nx.is_connected(g):
             g = nx.dense_gnm_random_graph(n, m)
 
+        if idx == 0:
+            continue
         graphs.append(g)
-
 
     for idx, eval_graph in enumerate(graphs):
         # exact computation
@@ -262,6 +276,7 @@ def main(args):
     if args.out_to_file:
         with open("./{}/Approach1/".format(args.out) + output_file, "w") as f:
             f.write('\n'.join(result))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='A implementation of treewidth calculation algorithms')
