@@ -1,5 +1,4 @@
 # Treewidth
 Algorithms for Treewidth Calculation in python.
 
-I implemented algorithms for determination problem (is tw(G) <= k ?).
-But I will implement algorithms for calculation problem (tw(G)?).
+I implemented the algorithms for determination problem (is tw(G) <= k ?) and the algorithms for calculation problem (tw(G)?).
